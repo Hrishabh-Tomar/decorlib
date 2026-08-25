@@ -1,0 +1,177 @@
+Metadata-Version: 2.4
+Name: decorlib
+Version: 0.1.0
+Summary: A small collection of dependency-free, production-minded Python decorators: retry, timeit, cache, log_calls, validate_types.
+Author: Your Name
+License: MIT
+Project-URL: Homepage, https://example.com/decorlib
+Keywords: decorators,retry,cache,logging,type-validation,timing
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Classifier: Intended Audience :: Developers
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Requires-Python: >=3.8
+Description-Content-Type: text/markdown
+
+# decorlib
+
+A small, dependency-free collection of production-minded Python decorators:
+
+- **`@retry`** — retry on failure, with delay/backoff/jitter and hooks
+- **`@timeit`** — measure and report execution time
+- **`@cache`** — memoize results, with optional TTL and LRU maxsize
+- **`@log_calls`** — log calls, arguments, results, and exceptions
+- **`@validate_types`** — validate arguments/return value against type hints
+
+Requires Python 3.8+. No third-party dependencies.
+
+## Install
+
+From this directory:
+
+```bash
+pip install .
+```
+
+For local development (editable install, so edits take effect immediately):
+
+```bash
+pip install -e .
+```
+
+From a pre-built wheel (see `dist/` after running `python -m build`):
+
+```bash
+pip install dist/decorlib-0.1.0-py3-none-any.whl
+```
+
+## Usage
+
+Every decorator works bare (`@retry`) or parameterized (`@retry(times=5)`).
+
+### `@retry`
+
+```python
+from decorlib import retry
+
+@retry(times=5, exceptions=ConnectionError, delay=0.5, backoff=2, jitter=0.1)
+def fetch(url):
+    ...
+```
+
+- `times` — max attempts (default 3)
+- `exceptions` — exception type or tuple to catch (default `Exception`)
+- `delay` / `backoff` — initial delay in seconds and multiplier applied after each attempt
+- `jitter` — extra random seconds added to each delay
+- `reraise` — re-raise the last exception (default) or raise `RetryError` wrapping it
+- `on_retry(attempt, exception)` — optional callback invoked before each retry
+
+### `@timeit`
+
+```python
+from decorlib import timeit
+
+@timeit(unit="ms", precision=2)
+def compute():
+    ...
+
+compute()
+print(compute.last_duration)  # duration of the most recent call
+```
+
+- `unit` — `"s"`, `"ms"`, or `"us"`
+- `logger` — callable to receive the report string (defaults to `print`)
+- `on_time(func_name, elapsed)` — optional callback instead of printing/logging
+
+### `@cache`
+
+```python
+from decorlib import cache
+
+@cache(maxsize=256, ttl=60)
+def expensive(x):
+    ...
+
+expensive.cache_info()   # CacheInfo(hits=.., misses=.., maxsize=.., currsize=..)
+expensive.cache_clear()
+```
+
+- `maxsize` — LRU eviction cap, or `None` for unbounded (default 128)
+- `ttl` — seconds before an entry expires, or `None` to never expire
+- `typed` — if `True`, arguments of different types are cached separately
+- Thread-safe.
+
+### `@log_calls`
+
+```python
+import logging
+from decorlib import log_calls
+
+@log_calls(logger=logging.getLogger("myapp"), level=logging.DEBUG)
+def process(order_id, retry=False):
+    ...
+```
+
+- `logger` — a `logging.Logger` (defaults to `decorlib.log_calls`)
+- `level` — log level for all emitted records
+- `log_args`, `log_result`, `log_exceptions` — toggle what gets logged
+
+### `@validate_types`
+
+```python
+from typing import List, Optional, Union
+from decorlib import validate_types
+
+@validate_types
+def total(values: List[int], discount: Optional[float] = None) -> Union[int, float]:
+    ...
+```
+
+Validates against the function's own annotations at call time — arguments and,
+by default, the return value. Supports plain types, `Optional`, `Union`, and
+parameterized `List`/`Dict`/`Tuple`/`Set`. Raises `decorlib.TypeValidationError`
+(a `TypeError` subclass) on mismatch. Pass `check_return=False` to skip
+validating the return value.
+
+## Stacking decorators
+
+All decorators use `functools.wraps`, so they compose cleanly:
+
+```python
+from decorlib import retry, timeit, cache, log_calls, validate_types
+
+@log_calls
+@timeit
+@retry(times=3)
+@cache(ttl=30)
+@validate_types
+def get_user(user_id: int) -> dict:
+    ...
+```
+
+## Notes / limitations
+
+- All decorators target synchronous functions; `async def` functions are not
+  currently supported.
+- `validate_types` does a best-effort structural check — deeply nested or
+  exotic typing constructs (e.g. `Protocol`, `TypedDict`, custom generics)
+  are not deeply validated and are skipped rather than raising a false
+  positive.
+
+## Development
+
+```bash
+pip install -e .
+pip install pytest
+pytest
+```
+
+## Build a distributable package
+
+```bash
+python -m pip install build
+python -m build
+# -> dist/decorlib-0.1.0-py3-none-any.whl
+#    dist/decorlib-0.1.0.tar.gz
+```
