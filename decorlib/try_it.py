@@ -1,4 +1,7 @@
-from decorlib import retry, timeit, cache, validate_types
+try:
+    from decorlib import cache, timeit, validate_types
+except (ImportError, TypeError):
+    from decorlib.decorlib import cache, timeit, validate_types
 
 @timeit
 @cache
